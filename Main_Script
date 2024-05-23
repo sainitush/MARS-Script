@@ -1,0 +1,202 @@
+
+//@version=5
+
+indicator('Moving Average Relative Strength', shorttitle="MARS")
+
+//Essential Inputs
+matype = input.string(title='Moving Average Type', defval='SMA', options=['SMA', 'EMA', 'WMA'], group='Moving Average for Relative Strength')
+malength = input(title='Moving Average Length', defval=50, group='Moving Average for Relative Strength')
+
+styleOption = input.string("Line", title="Plot Style",
+     options=["Line", "Histogram", "Columns"], group='Moving Average for Relative Strength')
+
+plotStyle = styleOption == "Line" ? plot.style_line :
+     styleOption == "Histogram" ? plot.style_histogram :
+     styleOption == "Columns" ? plot.style_columns :
+         plot.style_line
+
+showSmoothingLine = input.bool(defval=true, title="Show Smoothing Line", group="Smoothing")
+
+//Index for Relative Strength
+index = input.string(title='Index to compare To', defval='NSE:CNX500', options=['NSE:NIFTY', 'NSE:CNX500', 'NSE:NIFTYSMLCAP250', 'NSE:CNXSMALLCAP'],group='Index for Relative Strength')
+compareToOtherIndex = input.bool (title="Compare to different index?", defval=false,group='Index for Relative Strength',inline='Different compare')
+otherIndex = input.symbol(title='', defval='',group='Index for Relative Strength',inline='Different compare')
+
+//Customisation
+Paintbar=input(false,'Paint Bar?', group="Customisation", tooltip = 'Paint bars option changes the bar colors to mirror the MARS colors.')
+Backgroundcolor=input(false,'Background Color?', group="Customisation", tooltip = 'Background color indicates the index being above (blue) or below (pink) its moving average.')
+Easycolors=input(true,'Easy Colors?', group="Customisation", tooltip = 'Easy colors option just changes the histogram colors to either green or red, indicating out-performance or under-performance, respectively.')
+toggleDarkColors = input(title="Dark Mode for Table", defval=false, group = "Customisation", tooltip = 'Adjusts background colors of the table as per dark mode.')
+
+showZeroLine = input.bool(defval=true, title="Show Zero Line", inline='line 1', group="Customisation", tooltip = 'Displays the zero line. Recommended to be left turned on.')
+zerocolor = input(color.black, title='', inline='line 1', group="Customisation", tooltip = 'Changes the color of the zero line.')
+
+//Table options
+toggleTable = input(true, group = 'Table Options', title='Show table', tooltip = 'Select this to display the table')
+toggleVerboseTable = input.bool(title='Display verbose table?', defval=true, group='Table Options', tooltip = 'Select this to display the table with detailed text')
+
+
+//Color palette
+
+ropcolor = input(#32CD32, "Relative Outperformance", group="Histogram Colors")
+gopcolor = input(#228B22, "Gross Outperformance", group="Histogram Colors")
+aopcolor = input(#5ea3f0, "Absolute Outperformance", group="Histogram Colors")
+
+rupcolor = input(#df6b90, "Relative Underperformance", group="Histogram Colors")
+gupcolor = input(color.maroon, "Gross Underperformance", group="Histogram Colors")
+aupcolor = input(color.black, "Absolute Underperformance", group="Histogram Colors")
+
+ColorUp = #5ea3f0
+ColorDown = #df6b90
+
+roptext = "both index & stock are bearish, but stock is less bearish"
+goptext = "both index & stock are bullish, but stock is more bullish"
+aoptext = "index is bearish, but stock is bullish! 🤷‍♂️"
+ruptext = "both index & stock are bullish, but stock is less bullish"
+guptext = "both index & stock are bearish, but stock is more bearish"
+auptext = "index is bullish, but stock is bearish! 🙈"
+
+
+
+//Configuring the Moving Average
+ma_function(source, length) =>
+    if matype == 'SMA'
+        ta.sma(source, length)
+    else
+        if matype == 'EMA'
+            ta.ema(source, length)
+        else
+            if matype == 'WMA'
+                ta.wma(source, length)
+
+// Basic conditions
+
+indexToUse = compareToOtherIndex==false ? index : otherIndex
+closeIndex = request.security(indexToUse, timeframe.period, close)
+
+
+ma = ma_function(close, malength)
+maIndex = ma_function(closeIndex, malength)
+
+symbolPercent = (close - ma) / ma * 100
+indexPercent = (closeIndex - maIndex) / maIndex * 100
+val = symbolPercent - indexPercent
+
+priceIsAboveMa = close > ma
+priceIsAboveIndexMa = closeIndex > maIndex
+indexgreen = request.security(indexToUse, timeframe.period, priceIsAboveIndexMa)
+
+priceIsBelowMa = close <= ma
+priceIsBelowIndexMa = closeIndex <= maIndex
+indexred = request.security(indexToUse, timeframe.period, priceIsBelowIndexMa)
+
+iff_1 = indexred ? #FBAED2 : color.black
+IndexColor = indexgreen ? #9BDDFF : iff_1
+
+
+//Color coding
+
+rop = indexred and priceIsBelowMa and val>0
+gop = indexgreen and priceIsAboveMa and val>0
+aop = indexred and priceIsAboveMa
+
+rup = indexgreen and priceIsAboveMa and val<0
+gup = indexred and priceIsBelowMa and val<0
+aup = indexgreen and priceIsBelowMa
+
+BarColor = rop ? ropcolor : gop ? gopcolor : aop ? aopcolor : rup ? rupcolor : gup ? gupcolor : aup ? aupcolor : color.gray
+
+EasyColor = val >= 0 ? gopcolor : gupcolor
+
+//Plots
+
+BackColor = color.new(IndexColor, 20)
+
+bgcolor(Backgroundcolor? BackColor : na)
+
+barcolor(Paintbar? BarColor : na)
+
+plot(val, color=Easycolors ? EasyColor : BarColor, style=plotStyle, linewidth=2)
+
+plot(showZeroLine ? 0 : na, linewidth=1, color=zerocolor, title="Zero Line")
+
+//Smoothing
+
+ma(source, length, type) =>
+    switch type
+        "SMA" => ta.sma(source, length)
+        "EMA" => ta.ema(source, length)
+        "WMA" => ta.wma(source, length)
+
+
+typeMA = input.string(title = "Method", defval = "EMA", options=["SMA", "EMA", "WMA"], group="Smoothing")
+smoothingLength = input.int(title = "Length", defval = 9, minval = 1, maxval = 200, group="Smoothing")
+
+smoothingLine = ma(val, smoothingLength, typeMA)
+plot(showSmoothingLine ? smoothingLine : na, title="Smoothing Line", color=#f37f20)
+
+//Table
+
+BGColor = toggleDarkColors ? color.new(color.black, 0): color.new(color.white, 0)
+TextColor = color.new(color.white, 0)
+TextColorOther = toggleDarkColors ? color.new(color.white, 0): color.new(color.black, 0)
+
+FrameCol = toggleDarkColors ? color.new(#999999, 50) : color.rgb(241, 241, 241)
+BorderCol = toggleDarkColors ? color.new(color.white, 100): color.new(color.gray, 100)
+
+string tablesize = input.string("small",  "Size",      inline = "21", group = 'Table Options', options = ["tiny", "small", "normal", "large", "huge", "auto"])
+string tableposY = input.string("bottom", "↕",         inline = "21", group = 'Table Options', options = ["top", "middle", "bottom"])
+string tableposX = input.string("right",   "↔",         inline = "21", group = 'Table Options', options = ["left", "center", "right"])
+
+var table marstable = table.new(tableposY + "_" + tableposX, columns = 10, rows = 10, bgcolor = BGColor, frame_color = FrameCol, frame_width = 1, border_color = BorderCol, border_width = 1)
+
+
+if toggleTable and toggleVerboseTable
+
+    table.cell(marstable, 1, 0, text= rop ? 'Relative Outperformance' : gop ? 'Gross Outperformance' : aop ? 'Absolute Outperformance' : rup ? 'Relative Underperformance' : gup ? 'Gross Underperformance' : aup ? 'Absolute Underperformance' : 'Loading...', text_halign=text.align_center, bgcolor= Easycolors ? EasyColor : BarColor, text_color=TextColor, text_size=tablesize)
+    //table.cell(marstable, 1, 1, text= rop ? roptext : gop ? goptext : aop ? aoptext : rup ? ruptext : gup ? guptext : aup ? auptext : 'change either the stock or the moving average used for MARS', text_halign=text.align_center, bgcolor= BGColor, text_color=TextColorOther, text_size=size.tiny)
+
+else if toggleTable
+    table.cell(marstable, 1, 0, text= rop ? 'Relative Outperformance' : gop ? 'Gross Outperformance' : aop ? 'Absolute Outperformance' : rup ? 'Relative Underperformance' : gup ? 'Gross Underperformance' : aup ? 'Absolute Underperformance' : 'Loading...', text_halign=text.align_center, bgcolor= Easycolors ? EasyColor : BarColor, text_color=TextColor, text_size=tablesize)
+
+// Calculate RS Rating
+rs_rating(period) =>
+    // Calculate the relative strength of the stock and index
+    stock_rs = ta.rsi(close, period)
+    index_rs = ta.rsi(closeIndex, period)
+    // Calculate RS Rating
+    rating = (stock_rs / index_rs) * 100
+
+// Calculate Returns
+returns(period) =>
+    // Calculate percentage change in close price over the specified period
+    pct_change = ((close - close[period]) / close[period]) * 100
+    pct_change
+
+
+
+
+// Add RS Rating and Returns to the table
+if toggleTable
+    table.cell(marstable, 1, 0, text= rop ? 'Relative Outperformance' : gop ? 'Gross Outperformance' : aop ? 'Absolute Outperformance' : rup ? 'Relative Underperformance' : gup ? 'Gross Underperformance' : aup ? 'Absolute Underperformance' : 'Loading...', text_halign=text.align_left, bgcolor= Easycolors ? EasyColor : BarColor, text_color=TextColor, text_size=tablesize)
+    //table.cell(marstable, 1, 1, text= rop ? roptext : gop ? goptext : aop ? aoptext : rup ? ruptext : gup ? guptext : aup ? auptext : 'change either the stock or the moving average used for MARS', text_halign=text.align_left, bgcolor= BGColor, text_color=TextColorOther, text_size=size.tiny)
+    table.cell(marstable, 1, 1, text="RS Rating", text_halign=text.align_left, bgcolor= BGColor, text_color=color.black, text_size=size.small)
+    table.cell(marstable, 1, 2, text="5d Returns", text_halign=text.align_left, bgcolor= BGColor, text_color=TextColorOther, text_size=tablesize)
+    table.cell(marstable, 1, 3, text="10d Returns", text_halign=text.align_left, bgcolor= BGColor, text_color=TextColorOther, text_size=tablesize)
+    table.cell(marstable, 1, 4, text="20d Returns", text_halign=text.align_left, bgcolor= BGColor, text_color=color.black, text_size=size.small)
+    table.cell(marstable, 1, 5, text="50d Returns", text_halign=text.align_left, bgcolor= BGColor, text_color=color.black, text_size=size.small)
+
+// Populate the values for RS Rating and Returns in the table
+if toggleTable
+    rs_rating_value = rs_rating(14) // You can change the period as per your requirement
+    returns_5d = returns(5)
+    returns_10d = returns(10)
+    returns_20d = returns(20)
+    returns_50d = returns(50)
+
+
+    table.cell(marstable, 2, 1, text= str.tostring(rs_rating_value, "#.##"), text_halign=text.align_right, bgcolor= BGColor, text_color=color.black, text_size=tablesize)
+    table.cell(marstable, 2, 2, text= str.tostring(returns_5d,"#.##") , text_halign=text.align_right, bgcolor= BGColor, text_color=color.black, text_size=tablesize)
+    table.cell(marstable, 2, 3, text= str.tostring(returns_10d,"#.##"), text_halign=text.align_right, bgcolor= BGColor, text_color=color.black, text_size=tablesize)
+    table.cell(marstable, 2, 4, text= str.tostring(returns_20d, "#.##"), text_halign=text.align_right, bgcolor= BGColor, text_color=color.black, text_size=tablesize)
+    table.cell(marstable, 2, 5, text= str.tostring(returns_50d, "#.##"), text_halign=text.align_right, bgcolor= BGColor, text_color=color.black, text_size=tablesize)
