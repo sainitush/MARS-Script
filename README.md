@@ -1,5 +1,7 @@
 MARS-Script
-Coded in PineScriptv5
+Coded in PineScriptv5.
+![2024-05-23_23-52](https://github.com/sainitush/MARS-Script/assets/39233047/39a0d185-dc2e-46a3-a92b-1a9abc13a0dd)
+
 This indicator is called "Moving Average Relative Strength" (MARS) and is designed to analyze the performance of a stock relative to a chosen index. It provides a visual representation of the stock's performance compared to the index using a histogram or line plot. The key features of the MARS indicator are:
 
 1. Allows selection of the moving average type (SMA, EMA, or WMA) and length to calculate the relative strength
